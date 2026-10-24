@@ -138,8 +138,8 @@ Evaluation follows the protocol above.
 
 | benchmark | result |
 |---|---|
-| LAFAN1 (40 clips, full length) | return 0.82 after 0.46 h; 0/40 failures after 0.60 h (return 0.89) |
-| BONES-SEED hard motions (306 clips, [list](lists/bones_hard.csv)), trained on these clips only | 0/306 failures after 0.46 h (return 0.83); flips 54/54, side rolls 22/22 |
+| LAFAN1 (40 clips, full length) | return 0.82 after 0.46 h; 0/40 failures after 0.60 h (return 0.89); return 0.93 after 1.3 h (0/40 failures) |
+| BONES-SEED hard motions (306 clips, [list](lists/bones_hard.csv)), trained on these clips only | 0/306 failures after 0.46 h (return 0.83), flips 54/54, side rolls 22/22; return 0.91 after 1.5 h (0/306 failures) |
 | BONES-SEED | TBD |
 
 ## Citation
