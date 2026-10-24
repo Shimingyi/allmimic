@@ -11,6 +11,8 @@ backpropagating through 32 imagined steps of that frozen model, with a small cri
 imagined rollout. The authors did not release code. This code started from
 [dhmbb2/supermimic_vibe](https://github.com/dhmbb2/supermimic_vibe), a re-implementation of the paper.
 
+**Status: fully reproduced.** With the final defaults, all 306 hard BONES-SEED motions of the paper's failure table (flips, side rolls, broad jumps, crossed legs, lying down and standing up) play without a fall after 6.6 h of training on 2 RTX 4090 GPUs; the paper reports the same after 9.8 h on 2 H100. Details in [Results](#results).
+
 ## What is different
 
 Compared with the paper and the original implementation:
@@ -143,9 +145,42 @@ Evaluation follows the protocol above.
 
 | benchmark | result |
 |---|---|
-| LAFAN1 (40 clips, full length) | return 0.82 after 0.46 h; 0/40 failures after 0.60 h (return 0.89); return 0.93 after 1.3 h (0/40 failures) |
-| BONES-SEED hard motions (306 clips, [list](lists/bones_hard.csv)), trained on these clips only | 0/306 failures after 0.46 h (return 0.83), flips 54/54, side rolls 22/22; return 0.91 after 1.5 h (0/306 failures) |
-| BONES-SEED | TBD |
+| LAFAN1 (40 clips, full length) | return 0.85 after 0.42 h; 0/40 failures after 0.83 h (return 0.91); return 0.94 after 2.0 h (0/40 failures) |
+| BONES-SEED hard motions (306 clips, [list](lists/bones_hard.csv)), trained on these clips only | 0/306 failures after 0.68 h (return 0.88), flips 54/54, side rolls 22/22; return 0.91 after 1.5 h (0/306 failures) |
+| BONES-SEED (full training split, 2 GPUs) | all 306 hard motions after 6.6 h (176k iterations); 303/308 flips, cartwheels and handstands; held-out BONES-SEED motions 100.0% / 0.884, LAFAN1 94.6% / 0.806 ([details](#bones-seed)) |
+
+### BONES-SEED
+
+**Fully reproduced.** Trained on the full BONES-SEED training split with `--preset recommended` on 2 RTX 4090 GPUs, the policy plays all 306 hard motions of the paper's failure table without a fall after 6.6 h of training from scratch (176k iterations), together with 303 of the 308 flips, cartwheels and handstands of the training split, while generalizing to held-out BONES-SEED motions (100.0% success) and to LAFAN1, AMASS and MotionDecode, which it never saw. The paper reports no failures on its hard groups after 9.8 h on 2 H100.
+
+Test sets: LAFAN1, AMASS and MotionDecode (other datasets) and the held-out BONES-SEED splits, cut into 10 s
+segments, without clips a G1 cannot perform on an empty floor. The right panel and the last four columns count
+training clips played in full without a fall: the hard-motion list above and all flips, cartwheels and
+handstands of the training split.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/bones_seed_curve_dark.png">
+  <img src="assets/bones_seed_curve.png" width="100%" alt="BONES-SEED training curves: test-set return and success rate, and hard training motions solved, over training hours">
+</picture>
+
+Cells: success rate / mean return on the test sets, clips without a fall on the training motions.
+
+| training (h) | iterations | LAFAN1 | AMASS | MotionDecode | BONES unseen motions | BONES unseen performers | hard motions | flips | cartwheels | handstands |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.6 | 16k | 93.2% / 0.786 | 96.0% / 0.817 | 99.3% / 0.887 | 99.8% / 0.916 | 99.8% / 0.937 | 218/306 | 0/54 | 6/108 | 0/146 |
+| 1.2 | 32k | 92.7% / 0.801 | 97.3% / 0.833 | 99.4% / 0.906 | 99.8% / 0.923 | 99.9% / 0.949 | 244/306 | 0/54 | 31/108 | 0/146 |
+| 1.8 | 48k | 93.1% / 0.805 | 97.3% / 0.821 | 99.5% / 0.901 | 99.8% / 0.924 | 99.9% / 0.941 | 249/306 | 0/54 | 101/108 | 0/146 |
+| 2.4 | 64k | 95.1% / 0.846 | 97.7% / 0.845 | 99.5% / 0.901 | 99.8% / 0.929 | 99.9% / 0.943 | 251/306 | 0/54 | 100/108 | 0/146 |
+| 3.0 | 80k | 94.4% / 0.828 | 97.5% / 0.838 | 99.5% / 0.891 | 99.8% / 0.921 | 100.0% / 0.937 | 245/306 | 0/54 | 104/108 | 0/146 |
+| 3.6 | 96k | 95.1% / 0.815 | 97.3% / 0.820 | 99.5% / 0.879 | 99.8% / 0.913 | 100.0% / 0.922 | 258/306 | 7/54 | 105/108 | 0/146 |
+| 4.2 | 112k | 94.8% / 0.781 | 97.7% / 0.792 | 99.4% / 0.849 | 99.8% / 0.884 | 100.0% / 0.904 | 260/306 | 14/54 | 102/108 | 0/146 |
+| 4.8 | 128k | 94.1% / 0.821 | 97.6% / 0.826 | 99.5% / 0.886 | 99.8% / 0.902 | 99.9% / 0.920 | 268/306 | 18/54 | 105/108 | 0/146 |
+| 5.4 | 144k | 94.8% / 0.804 | 98.1% / 0.821 | 99.6% / 0.862 | 99.9% / 0.846 | 100.0% / 0.883 | 298/306 | 51/54 | 107/108 | 79/146 |
+| 6.0 | 160k | 93.3% / 0.755 | 96.7% / 0.795 | 99.1% / 0.860 | 99.9% / 0.830 | 99.5% / 0.890 | 303/306 | 53/54 | 108/108 | 120/146 |
+| 6.6 | 176k | 94.6% / 0.806 | 97.5% / 0.823 | 99.6% / 0.886 | 100.0% / 0.884 | 100.0% / 0.919 | 306/306 | 54/54 | 108/108 | 141/146 |
+
+Without the value clip, the same configuration diverged at 6.6 h (critic loss above 1e10); with it the critic
+loss stays below 0.3. Without balanced sampling, no flip succeeded within 4.5 h.
 
 ## Citation
 
