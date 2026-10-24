@@ -69,6 +69,10 @@ class TrainCfg:
     # training; 1 / H (= 1/32) is equivalent under Adam to "no 1/H in the loss, clip 1.0"
     pi_clip: float = 1.0
     critic_heads: int = 1  # > 1: critic ensemble, per-head lambda-returns, policy bootstraps on the mean
+    # #29: clamp the critic values used as lambda-return targets and as the policy's bootstrap to
+    # +-max_step_reward / (1 - gamma), the reachable range. Without it long runs diverge: the critic overestimates a few
+    # states, the policy follows the bootstrap there and the critic loss explodes after 5-7 h.
+    value_clip: bool = False
     wm_rot_out: str = 'axis'  # 'tripoint': the WM predicts the rotation change as tri-point markers (#25)
     # #26 (experimental): query the WM only where it was fit, and measure when that fails
     clean_prev_action: bool = False  # the obs' last action and the action-rate term use the pre-noise action
@@ -245,6 +249,7 @@ class Trainer:
         self.priv_dim = 9 * self.tcfg.future if self.task.priv_goal else 0
         self.critic_in = self.feat_dim + self.goal_dim + XI_DIM + 1 + self.priv_dim
         self.critic = Critic(self.critic_in, heads=cfg.critic_heads).to(device)
+        self.vmax = self.tcfg.max_step_reward / (1 - cfg.gamma) if cfg.value_clip else None
         if cfg.optimizer == 'muon':
             self.opt_wm = MuonAdam([self.wm.net], cfg.lr)
             self.opt_pi = MuonAdam([self.policy.encoder, self.policy.decoder], cfg.lr, betas=(0.9, 0.95))
@@ -594,7 +599,7 @@ class Trainer:
                 s, hist = {k: v.detach() for k, v in s.items()}, hist.detach()
         xH = self.critic_input(an['feats'], an['goal'], xi, rem_all[:, H], an.get('goal_priv'))
         if cfg.use_critic:
-            vH = self.critic(xH)
+            vH = self.value(xH)
             vH = (vH if cfg.critic_heads == 1 else vH.mean(-1)) * valid[:, H]
             J = J + (cfg.gamma**H) * c * vH
         return J, c, rec, rew_terms, xH
@@ -658,6 +663,12 @@ class Trainer:
             'gap_surv_sim': 1 - fell.float().mean().item(),
         }
 
+    def value(self, x):
+        """critic values for the lambda-return targets and the policy's bootstrap, clamped to the reachable range
+        when value_clip (#29)"""
+        v = self.critic(x)
+        return v.clamp(-self.vmax, self.vmax) if self.vmax else v
+
     def update_critic(self, rec, xH, valid):
         cfg = self.cfg
         H = cfg.horizon
@@ -666,7 +677,7 @@ class Trainer:
         ens = cfg.critic_heads > 1
         ex = (lambda t: t.unsqueeze(-1)) if ens else (lambda t: t)  # per-head returns on a trailing axis
         with torch.no_grad():
-            V = self.critic(X) * ex(valid)
+            V = self.value(X) * ex(valid)
             R = torch.zeros_like(V)
             R[:, H] = V[:, H]
             for t in range(H - 1, -1, -1):
@@ -863,14 +874,17 @@ class Trainer:
 # ---- presets
 # Named flag sets for `--preset`. A preset only replaces argparse defaults, so explicit flags still override it, and
 # without --preset every default is the TrainCfg (upstream) value. Not stored in the checkpoint: the cfg saved there
-# holds the resolved values. The infeasible-clip whitelist (--clip-list) depends on the data and is never in a preset.
+# holds the resolved values. The infeasible-clip whitelist (--clip-list) and the bin prior (--bin-prior) depend on the
+# data and are never in a preset.
 PRESETS = {
     # the README configuration: upper-body residual + absolute legs (#11, #20), latent 128 (#13), 25% noise-free
     # collection (#23), capped reset sampler (#19), a policy clip that fires (#24), WM joint error-propagation weights
-    # (#21; clip at the default 4.0), CUDA graphs for imagination and WM loss (#16)
+    # (#21; clip at the default 4.0), CUDA graphs for imagination and WM loss (#16), value clip (#29), and the
+    # cluster-balanced reset weights at alpha 0.3 (#28; on only with a --bin-prior file, which depends on the data)
     'recommended': {'action': 'res', 'res_scale': 1.0, 'res_legs': 'abs', 'latent': 128, 'collect_det_frac': 0.25,
                     'softmax_cap': 50.0, 'pi_clip': 0.03125, 'wm_joint_weights': 'tracked', 'wm_joint_weight_clip': 4.0,
-                    'compile_bptt': 'reduce-overhead', 'wm_compile_mode': 'reduce-overhead'},
+                    'compile_bptt': 'reduce-overhead', 'wm_compile_mode': 'reduce-overhead', 'value_clip': True,
+                    'bin_prior_alpha': 0.3},
 }  # fmt: skip
 
 

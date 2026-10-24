@@ -26,13 +26,19 @@ Compared with the paper and the original implementation:
   their errors propagate to the tracked bodies.
 - **A capped reset sampler and a policy gradient clip that takes effect.** Hard-example mining cannot pile onto a few
   unlearnable clips. The original clip never acted because the loss is divided by the horizon.
+- **Balanced reset sampling.** The 1 s reset bins of the training data are clustered by reference kinematics and
+  rare clusters start episodes more often: each cluster's share grows with size^0.3 instead of its size. Flips are
+  0.04% of the BONES-SEED bins; without this, no flip is learned from the full training split.
+- **A value clip.** Critic values used as targets and as the policy's bootstrap are clamped to the reachable range,
+  ±(maximum step reward) / (1 − γ). Without it the critic eventually overestimates a few states, the policy follows
+  the bootstrap there, and long runs diverge after 5 to 7 h. With it the critic loss stays flat.
 - **Infeasible-clip filtering for BONES-SEED.** References a G1 cannot perform on a flat, empty floor, such as
   sitting on an invisible chair or leaning on a wall, are left out of training.
 - **Compiled training steps with CUDA graphs** for the imagined rollout and the world-model loss, for faster
   training with unchanged gradients.
 
-`--preset recommended` turns all of this on, except the clip filter, which is a data file. Without the preset,
-every default is the original behavior. [CHANGES.md](CHANGES.md) lists every change, with its tests.
+`--preset recommended` turns all of this on, except two data files: the infeasible-clip list and the bin clusters
+for balanced sampling. Without the preset, every default is the original behavior. [CHANGES.md](CHANGES.md) lists every change, with its tests.
 
 ## Install
 
@@ -78,6 +84,8 @@ python tools/build_allmimic_library.py --csv-dir $CSV --format bones --fps-in 12
     --clip-list data/splits/bones_seed/train.txt --out data/library/bones_train.npz
 python tools/filter_infeasible.py features --lib data/library/bones_train.npz --out data/feats/bones_train.npz
 python tools/filter_infeasible.py flag --feats data/feats/bones_train.npz --dataset bones_train
+# bin clusters for balanced reset sampling (CPU) -> data/bin_clusters/bones_train.npz
+python tools/bin_clusters.py --lib data/library/bones_train.npz --workers 16 --out data/bin_clusters/bones_train
 # test libraries (full clips and 10 s segments), e.g. for test_content
 python tools/build_allmimic_library.py --csv-dir $CSV --format bones --fps-in 120 \
     --clip-list data/splits/bones_seed/test_content.txt --out data/library_eval/bones_test_content.npz
@@ -102,17 +110,14 @@ Other G1 retargets in the LAFAN1 CSV layout can be built as extra test sets with
 # LAFAN1, one GPU
 python -m allmimic.train --preset recommended --motions data/processed/lafan1_50hz.npz --out runs/lafan1
 
-# BONES-SEED, one 24 GB GPU
-python -m allmimic.train --preset recommended --motions data/library/bones_train.npz \
-    --clip-list data/infeasible/bones_train_feasible.txt --pi-batch 2048 --eval-every 0 --out runs/bones
+# BONES-SEED, 2 GPUs on one node: the reported run (batch sizes are per GPU; the learning rate scales with sqrt(GPUs))
+torchrun --standalone --nproc_per_node=2 -m allmimic.train --preset recommended --motions data/library/bones_train.npz \
+    --clip-list data/infeasible/bones_train_feasible.txt --bin-prior data/bin_clusters/bones_train.npz \
+    --pi-batch 2048 --eval-every 0 --out runs/bones
 
 # hard motions only, one GPU. In-run evaluation on all 306 clips every 4k iterations -> eval.jsonl
 python -m allmimic.train --preset recommended --motions data/library_eval/bones_hard.npz --eval-every 4000 \
     --eval-clips 0 --out runs/bones_hard
-
-# BONES-SEED, 4 GPUs on one node (batch sizes are per GPU; the learning rate scales with sqrt(GPUs))
-torchrun --standalone --nproc_per_node=4 -m allmimic.train --preset recommended --motions data/library/bones_train.npz \
-    --clip-list data/infeasible/bones_train_feasible.txt --pi-batch 2048 --eval-every 0 --out runs/bones_4gpu
 ```
 
 A run writes `log.jsonl`, checkpoints (`ckpt_*.pt`, `last.pt`; resume with `--resume`) and, on LAFAN1, `eval.jsonl`

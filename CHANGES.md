@@ -48,6 +48,7 @@ Every change below is a switch whose default keeps the original behavior (bit-id
 | 26 | WM-consistency options: `--clean-prev-action`, `--w-residual`, `--retire-g`, `--bptt-detach`, and an imagination-gap monitor `--gap-every` (logging only). | yes (off) | `tests/test_flags.py` |
 | 27 | `--optimizer muon`: Muon on the hidden weight matrices of WM and policy, Adam elsewhere (torch ≥ 2.9). | yes (`adam`) | `tests/test_flags.py` |
 | 28 | `--bin-prior file.npz`: cluster-balanced reset sampling; `tools/bin_clusters.py` clusters the 1 s bins by reference kinematics and writes per-bin weights that multiply the return-based probabilities (rare motions such as flips are a tiny share of the bins). | yes (off) | `tests/test_flags.py` |
+| 29 | `--value-clip true`: the critic values used as lambda-return targets and as the policy's bootstrap are clamped to ±max_step_reward / (1 − γ) (±10 with the default reward and γ = 0.99). Long runs without it diverged after 5 to 7 h: the critic overestimated a few states, the policy followed the bootstrap there and the critic loss exploded. Normal values are 6.5 to 7, so the clamp only acts on those outliers. `--preset recommended` also sets `--bin-prior-alpha 0.3` (#28) and `--value-clip true`. | yes (off) | `tests/test_flags.py` |
 
 ## Other differences
 

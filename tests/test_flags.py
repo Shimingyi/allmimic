@@ -348,8 +348,10 @@ def check_critic_heads():
         cfg = SimpleNamespace(
             horizon=H, gamma=0.99, lam=0.95, critic_epochs=2, critic_minibatches=4, critic_heads=heads
         )
-        return SimpleNamespace(cfg=cfg, critic=c, opt_v=torch.optim.Adam(c.net.parameters(), lr=1e-3), device='cpu',
-                               sync_grads=lambda params: None)  # fmt: skip
+        st = SimpleNamespace(cfg=cfg, critic=c, opt_v=torch.optim.Adam(c.net.parameters(), lr=1e-3), device='cpu',
+                             sync_grads=lambda params: None, vmax=None)  # fmt: skip
+        st.value = lambda x: Trainer.value(st, x)
+        return st
 
     a, b = stub(1), stub(1)
     torch.manual_seed(5)
@@ -363,6 +365,29 @@ def check_critic_heads():
     v = e.critic(torch.randn(7, D))
     assert v.shape == (7, 2) and math.isfinite(re['v_loss']) and not torch.equal(v[:, 0], v[:, 1])
     print('  critic heads ok (1 head bit-identical to the frozen update, 2 heads: (..., 2), trains)')
+
+
+def check_value_clip():
+    from types import SimpleNamespace
+
+    from allmimic.networks import Critic
+    from allmimic.train import PRESETS, TrainCfg, Trainer
+
+    torch.manual_seed(0)
+    c = Critic(12, hidden=(16, 8))
+    st = SimpleNamespace(critic=c, vmax=None)
+    x = torch.randn(5, 12, requires_grad=True)
+    with torch.no_grad():
+        c.net[-1].bias.fill_(100.0)
+    assert torch.equal(Trainer.value(st, x), c(x)), 'value_clip off: the raw critic'
+    st.vmax = 0.1 / (1 - 0.99)
+    v = Trainer.value(st, x)
+    assert torch.allclose(v, torch.full_like(v, st.vmax)), 'values above the reachable range clamp'
+    v.sum().backward()
+    assert x.grad.abs().max() == 0, 'no gradient through a clamped bootstrap'
+    assert TrainCfg().value_clip is False and PRESETS['recommended']['value_clip'] is True
+    assert PRESETS['recommended']['bin_prior_alpha'] == 0.3 and 'bin_prior' not in PRESETS['recommended']
+    print('  value clip ok (off by default, clamp at max_step_reward / (1 - gamma), no gradient past it, in the preset)')
 
 
 def check_wm_tripoint_out():
@@ -522,6 +547,7 @@ def main(argv=None):
     check_cap_and_keep()
     check_wm_joint_weights()
     check_critic_heads()
+    check_value_clip()
     check_wm_tripoint_out()
     check_v3_consistency()
     check_muon()
