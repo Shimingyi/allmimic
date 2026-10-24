@@ -1,0 +1,8 @@
+# Code style: 4 spaces, single quotes, 120 columns.
+#   ruff check . && ruff format --check .
+line-length = 120
+indent-width = 4
+target-version = 'py311'
+
+[format]
+quote-style = 'single'

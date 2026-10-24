@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/
+runs/
+*.tmp
+*.tmp.npz

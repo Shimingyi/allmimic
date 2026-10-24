@@ -1,0 +1,17 @@
+# Python 3.11 and one or more CUDA GPUs. These are the versions every result in README.md was produced with
+# (torch from the CUDA 12.6 wheel index: pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cu126).
+torch==2.14.1
+mjlab==1.2.0
+mujoco==3.5.0
+mujoco-warp==3.5.0
+warp-lang==1.12.0
+numpy==2.4.6
+rsl-rl-lib==5.0.1
+tensordict==0.14.3
+scipy==1.17.1
+matplotlib
+trimesh
+prettytable
+tyro
+mediapy
+pytest            # tests only

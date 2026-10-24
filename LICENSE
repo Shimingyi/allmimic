@@ -1,0 +1,12 @@
+LICENSE NOT YET CHOSEN -- placeholder for the repository owner.
+
+This code is derived from dhmbb2/supermimic_vibe (https://github.com/dhmbb2/supermimic_vibe,
+commit 072f0910dadc9d95c720e625b546120e9ce917c9), which has no license file. Without a license
+from the upstream author, redistribution rights for the upstream-derived parts are unclear.
+
+Before publishing:
+  1. clarify the terms with the upstream author (or obtain a license for the upstream code), then
+  2. replace this file with the chosen license text (e.g. MIT, BSD-3-Clause or Apache-2.0,
+     compatible with whatever the upstream author grants), and update the License section of README.md.
+
+No motion data is included; datasets (BONES-SEED, LAFAN1 retargets) keep their own licenses.
